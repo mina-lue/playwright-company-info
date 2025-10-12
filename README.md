@@ -1,2 +1,2 @@
-# To start the script type this
- -> npm run asic
+# start the script
+ 🟢 npm run asic
