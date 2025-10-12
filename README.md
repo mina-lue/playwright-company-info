@@ -1,2 +1,2 @@
-## Here is the command to start the script automate ...
-npm run asic
+# To start the script type this
+ -> npm run asic
