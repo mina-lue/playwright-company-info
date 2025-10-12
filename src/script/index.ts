@@ -106,6 +106,7 @@ async function askQuestion(query: string): Promise<string> {
 
   const checkoutBtn = page.locator("button#bnConnectionTemplate\\:r1\\:0\\:cb6");
   await checkoutBtn.waitFor({ state: "visible", timeout: 60000 });
+  await page.waitForTimeout(500);
   await checkoutBtn.click({ force: true });
   console.log("✅ 'Checkout' button clicked!");
 
