@@ -87,7 +87,7 @@ try {
   console.warn("⚠️ Normal click failed, retrying with JavaScript...");
   // Use JavaScript to dispatch a real DOM click
   const elHandle = await label.elementHandle();
-  await page.evaluate((el: HTMLElement) => el.click(), elHandle);
+  await page.evaluate((el) => el && (el as HTMLElement).click(), elHandle);
   console.log("✅ Label clicked via JS fallback");
 }
 
@@ -141,7 +141,7 @@ try {
   console.log("🟢 Clicked visible OK button successfully");
 } catch (err) {
   console.warn("⚠️ Normal click failed, retrying with JavaScript...");
-  await page.evaluate((el) => el.click(), await visibleOkButton.elementHandle());
+  await page.evaluate((el) => (el as HTMLElement).click(), await visibleOkButton.elementHandle());
   console.log("✅ Clicked visible OK button via JS fallback");
 }
 

@@ -1,8 +1,13 @@
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import fs from "fs"
+import * as dotenv from "dotenv";
 
-const s3 = new S3Client()
+dotenv.config();
+
+const s3 = new S3Client();
+const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY
+const accessKeyId = process.env.AWS_ACCESS_KEY_ID
 const Bucket = process.env.BUCKET_NAME
 
 export const fileExists = async (bucket: string, key: string): Promise<boolean> => {
@@ -26,25 +31,22 @@ export const getReportPresignedUrl = async (bucket: string, key: string, expires
 }
 
 export async function getPresignedUrl(key: string, mode: "PUT" | "GET", metadata?: Record<string, string>) {
- /* const { secretAccessKey, accessKeyId } = await getParameters([
-    "/urlPresigner/accessKeyId",
-    "/urlPresigner/secretAccessKey",
-  ]) */
+  if(accessKeyId && secretAccessKey){
+   const s3Client = new S3Client({
+     credentials: { accessKeyId, secretAccessKey },
+   })
+   
+   const command =
+     mode == "GET"
+       ? new GetObjectCommand({ Bucket, Key: key })
+       : new PutObjectCommand({ Bucket, Key: key, Metadata: metadata })
+   
+   const expiresIn = 86400 * 7 // 7 days
+   return await getSignedUrl(s3Client, command, { expiresIn })
+  }
 
-const secretAccessKey = ''
-const accessKeyId = ''
+  throw Error('Environment variables not set!')
 
-  const s3Client = new S3Client({
-    credentials: { accessKeyId, secretAccessKey },
-  })
-
-  const command =
-    mode == "GET"
-      ? new GetObjectCommand({ Bucket, Key: key })
-      : new PutObjectCommand({ Bucket, Key: key, Metadata: metadata })
-
-  const expiresIn = 86400 * 7 // 7 days
-  return await getSignedUrl(s3Client, command, { expiresIn })
 }
 
 export async function uploadPdf(key: string, fileName: string, metadata?: Record<string, string>): Promise<void> {
