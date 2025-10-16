@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import { solveCaptcha } from "./utils/solveRecaptcha";
 
 export const fetchDocument = async (ACN : string ) : Promise<string> => {
   const browser = await chromium.launch({ headless: false }); 
@@ -10,8 +11,8 @@ export const fetchDocument = async (ACN : string ) : Promise<string> => {
   console.log("🌐 Navigating to ASIC Registry...");
   await page.goto("https://connectonline.asic.gov.au/RegistrySearch");
 
-  await page.waitForTimeout(100);
-  console.log("⏳ Waiting 100ms before typing search text...");
+  await page.waitForTimeout(1000);
+  console.log("⏳ Waiting 1000ms before typing search text...");
 
   // Select search type
   await page
@@ -20,7 +21,7 @@ export const fetchDocument = async (ACN : string ) : Promise<string> => {
     )
     .selectOption({ label: "Organisation and Business Names" });
 
-  await page.waitForTimeout(100);
+  await page.waitForTimeout(1000);
   console.log("⌨️ Filling search text...");
 
   const searchInput = page.locator(
@@ -33,6 +34,9 @@ export const fetchDocument = async (ACN : string ) : Promise<string> => {
   await searchInput.press("Enter");
 
   console.log('✅ Clicked "Go". Waiting for results table...');
+
+  await page.waitForTimeout(1000);
+  await solveCaptcha(page);
 
   await page
     .getByText("Information for purchase", { exact: false })
