@@ -1,8 +1,8 @@
 import { chromium } from "playwright";
-import { solveCaptcha } from "./utils/solveRecaptcha";
+import { solveRecaptcha } from "./utils/solveRecaptcha";
 
 export const fetchDocument = async (ACN : string ) : Promise<string> => {
-  const browser = await chromium.launch({ headless: false }); 
+  const browser = await chromium.launch({ headless: true }); 
   const context = await browser.newContext();
   const page = await context.newPage();
 
@@ -36,7 +36,7 @@ export const fetchDocument = async (ACN : string ) : Promise<string> => {
   console.log('✅ Clicked "Go". Waiting for results table...');
 
   await page.waitForTimeout(1000);
-  await solveCaptcha(page);
+  await solveRecaptcha(page);
 
   await page
     .getByText("Information for purchase", { exact: false })

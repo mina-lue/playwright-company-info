@@ -1,118 +1,131 @@
 import { Solver } from '2captcha';
 import { Page } from 'playwright-core';
-import sharp from "sharp"
 import "dotenv/config"
 
-export async function mergeCaptchaFrames(frames: Buffer[]): Promise<Buffer> {
-  const images = await Promise.all(
-    frames.map((frame) => sharp(frame).ensureAlpha().raw().toBuffer({ resolveWithObject: true })),
-  )
 
-  const { info } = images[0]!
-  const { width, height, channels } = info
-  const totalLength = width * height * channels
+export async function solveRecaptcha(page: Page): Promise<void> {
+  // Create 2Captcha solver
+  console.log("🧠 Creating 2Captcha solver instance...");
+  const solver = new Solver(process.env.TWOCAPTCHA_API_KEY || "");
+  if (!process.env.TWOCAPTCHA_API_KEY) {
+    throw new Error("Please set TWOCAPTCHA_API_KEY in your environment.");
+  }
 
-  // Accumulate float32 buffer
-  const accum = new Float32Array(totalLength)
+  // Find the reCAPTCHA sitekey on the page
+  const siteKey = await page.getAttribute('div[data-sitekey], .g-recaptcha', 'data-sitekey').catch(() => null);
+  if (!siteKey) throw new Error("Could not find reCAPTCHA sitekey on page.");
+  console.log("🧩 Found sitekey:", siteKey);
 
-  for (const { data } of images) {
-    for (let i = 0; i < totalLength; i += channels) {
-      const r = data[i]
-      const g = data[i + 1]
-      const b = data[i + 2]
-      const a = data[i + 3]
+  // Send to 2Captcha for solving
+  console.log("⏳ Sending CAPTCHA to 2Captcha...");
+  const response = await solver.recaptcha(
+    siteKey,
+     page.url()
+  );
 
-      if(!(a && r && g && b)) break;
-      const alphaFactor = a / 255
-      const isMostlyWhite = r > 200 && g > 200 && b > 200
+  const captchaToken = response.data;
+  console.log("🟢 Captcha solved, token received (truncated):", captchaToken.slice(0, 20) + "...");
 
-      accum[i]! += isMostlyWhite ? 0 : r * alphaFactor * 1.5 // R
-      accum[i + 1]! += isMostlyWhite ? 0 : g * alphaFactor * 0.5 // G
-      accum[i + 2]! += isMostlyWhite ? 0 : b * alphaFactor * 0.5 // B
-      accum[i + 3]! += a
+  // Inject token into page
+  await page.evaluate((token) => {
+    let textarea = document.querySelector<HTMLTextAreaElement>('#g-recaptcha-response');
+    if (!textarea) {
+      textarea = document.createElement('textarea');
+      textarea.id = 'g-recaptcha-response';
+      document.body.appendChild(textarea);
     }
-  }
+    textarea.style.display = 'block';
+    textarea.value = token;
+  }, captchaToken);
 
-  // Normalize and convert to output buffer
-  const output = Buffer.alloc(totalLength)
-  for (let i = 0; i < totalLength; i++) {
-    output[i] = Math.min(255, accum[i]! / frames.length)
+  // Optionally, trigger the form submission if necessary
+  const submitBtn = await page.$('button:has-text("Verify")');
+  if (submitBtn) {
+    console.log("🧾 Submitting form...");
+    await submitBtn.click();
+  } else {
+    await triggerSiteAfterToken(page, captchaToken);
   }
-
-  return sharp(output, {
-    raw: {
-      width,
-      height,
-      channels,
-    },
-  })
-    .png()
-    .toBuffer()
 }
 
-async function captureCaptchaFrames(page: Page, selector: string, count = 5, delay = 300): Promise<Buffer[]> {
-  await page.waitForTimeout(3000)
-  const frame = page.frameLocator('iframe[name^="c-"]')
-
-  const captchaImg = frame.locator(selector).first()
-  await captchaImg.waitFor({ state: "visible", timeout: 10000 });
-
-  await captchaImg.scrollIntoViewIfNeeded()
-  await page.waitForTimeout(100)
-
-  const box = await captchaImg.boundingBox()
-  if (!box) throw new Error("Could not determine bounding box for captcha image")
-
-  const frames: Buffer[] = []
-
-  for (let i = 0; i < count; i++) {
+// call this after injecting the token into #g-recaptcha-response
+async function triggerSiteAfterToken(page: Page, token: string): Promise<boolean> {
+  // 1) If page has element with data-callback, call that callback with the token
+  const callbackResult = await page.evaluate((tkn) => {
     try {
-      const frame = await page.screenshot({ clip: box })
-      frames.push(frame)
+      // prefer the element that contains the data-callback attribute (common pattern)
+      const el = document.querySelector<HTMLElement>('[data-callback]');
+      const cbName = el?.getAttribute('data-callback');
+      if (cbName && typeof (window as any)[cbName] === 'function') {
+        (window as any)[cbName](tkn);
+        return { invoked: true, name: cbName };
+      }
+
+      // some pages store callback on grecaptcha widget id, try grecaptcha if available
+      if ((window as any).grecaptcha && typeof (window as any).grecaptcha.execute === 'function') {
+        // try to execute; many implementations rely on grecaptcha.execute() to open/complete flow
+        try { (window as any).grecaptcha.execute(); return { invoked: true, name: 'grecaptcha.execute' }; } catch {}
+      }
+
+      return { invoked: false };
     } catch (e) {
-      console.error(`Failed to capture frame #${i + 1}:`, e)
+      return { invoked: false, error: String(e) };
     }
-    await page.waitForTimeout(delay)
+  }, token);
+
+  if (callbackResult && (callbackResult as any).invoked) {
+    console.log('✅ Called page callback:', (callbackResult as any).name ?? '<unknown>');
+    return true;
   }
-  if (frames.length < 2) throw new Error("Not enough frames captured.")
-  return frames
-}
 
-export async function solveCaptcha(page: Page): Promise<boolean> {
-  const TwoCaptchaApiKey = await process.env.TWOCAPTCHA_API_KEY;
-  const solver = new Solver(TwoCaptchaApiKey || "")
+  // 2) Set any custom hidden token field 
+  await page.evaluate((tkn) => {
+    const alt = document.querySelector<HTMLInputElement>('#recaptcha-token');
+    if (alt) {
+      alt.value = tkn;
+      alt.dispatchEvent(new Event('input', { bubbles: true }));
+      alt.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }, token);
 
-  for (let attempts = 0; attempts < 5; attempts++) {
+  // any of the common fallback selectors to try clicking
+  const fallbackSelectors = [
+    '#recaptcha-verify-button',
+    'button:has-text("Verify")',
+    'button:has-text("Submit")',
+    'button:has-text("Continue")',
+    'button[type="submit"]',
+    'input[type="submit"]',
+    'a.af_button_link:has-text("OK")'
+  ];
+
+  for (const sel of fallbackSelectors) {
     try {
-      if (await page.locator('tr:has-text("Current and historical company information")').isVisible({ timeout: 2000 })) {
-        return true
-      }
-
-      console.log(`Attempting to solve captcha, attempt #${attempts + 1}`)
-
-      const frames = await captureCaptchaFrames(page, "img.rc-image-tile-33", 5, 300)
-      const merged = await mergeCaptchaFrames(frames)
-
-      const captchaBase64 = merged.toString("base64")
-      const result = await solver.imageCaptcha(captchaBase64)
-      const captchaCode = result.data
-
-      console.log(`Captcha solved: ${captchaCode}`)
-
-      //await page.fill("#captchaCode", captchaCode)
-      await page.click('#recaptcha-verify-button')
-
-
+      const el = await page.$(sel);
+      if (!el) continue;
+      // scroll and try click
+      try { await el.scrollIntoViewIfNeeded(); } catch {}
       try {
-        await page.waitForSelector("#quickSearchSelect", { timeout: 5000 })
-        return true
-      } catch {
-        console.log("Captcha submit failed, retrying...")
+        await el.click({ force: true });
+        console.log('✅ Clicked fallback selector:', sel);
+        await page.waitForTimeout(300); // allow site to react
+        return true;
+      } catch (clickErr) {
+        // attempt JS fallback click
+        try {
+          const handle = await el.evaluateHandle((e: any) => e);
+          await page.evaluate((e: HTMLElement) => (e as any).click(), handle);
+          console.log('✅ JS-clicked fallback selector:', sel);
+          await page.waitForTimeout(300);
+          return true;
+        } catch {}
       }
-    } catch (err) {
-      console.error(`Captcha attempt #${attempts + 1} failed:`, err)
+    } catch (e) {
+      // ignore and continue to next selector
     }
   }
 
-  throw new Error("Max captcha attempts reached.")
+  console.log('⚠️ Token injected but no callback or submit control was triggered.');
+  return false;
 }
+
