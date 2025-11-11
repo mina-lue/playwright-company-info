@@ -49,24 +49,43 @@ export const pay = async (page: Page): Promise<Boolean> => {
 
     await frame.fill("#payment-cvc", cardCVC!);
 
-
-
     // Wait for the iframe to appear
-const frameEl = await page.waitForSelector('#bnConnectionTemplate\\:r1\\:3\\:payNowInline', { timeout: 30000 });
-const frame2 = await frameEl.contentFrame();
-if (!frame2) throw new Error("Payment iframe not loaded");
+    const frameEl = await page.waitForSelector(
+      "#bnConnectionTemplate\\:r1\\:3\\:payNowInline",
+      { timeout: 30000 }
+    );
+    const frame2 = await frameEl.contentFrame();
+    if (!frame2) throw new Error("Payment iframe not loaded");
 
-// Wait for the submit button inside the iframe
-const submitBtn = await frame2.waitForSelector('a.af_button_link:has-text("Submit")', { timeout: 60000 });
+    // Wait for the submit button inside the iframe
+    const submitBtn = await frame2.waitForSelector(
+      'a.af_button_link:has-text("Submit")',
+      { timeout: 60000 }
+    );
 
-// Scroll into view and click
-await submitBtn.scrollIntoViewIfNeeded();
-await submitBtn.click();
-
+    // Scroll into view and click
+    await submitBtn.scrollIntoViewIfNeeded();
+    await submitBtn.click();
 
     await page.click('a.af_button_link:has-text("Submit")');
 
     console.log("✅ Payment details submitted.");
+
+    // Locate the list item containing your email text
+    const listItem = frame2.locator('li.row:has-text("me********@gmail.com")');
+
+    await listItem.waitFor({ state: "visible", timeout: 10000 });
+
+    // Find the input inside that list item
+    const emailInput = listItem.locator('input[type="radio"]');
+
+    // Wait for it to be visible
+    await emailInput.waitFor({ state: "visible", timeout: 5000 });
+
+    // Click the radio button
+    await emailInput.click();
+
+    console.log("✅ Selected the email input successfully");
     return true;
   } catch (err) {
     console.log("⚠️ Could not make payment!", err);

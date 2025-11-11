@@ -114,13 +114,13 @@ export const fetchDocument = async (ACN : string ) : Promise<string> => {
     "input#bnConnectionTemplate\\:r1\\:2\\:emailAddress\\:\\:content"
   );
   await emailInput.waitFor({ state: "visible", timeout: 60000 });
-  await emailInput.fill("test@example.com");
+  await emailInput.fill("meseminalu@gmail.com");
 
   const emailCopyInput = page.locator(
     "input#bnConnectionTemplate\\:r1\\:2\\:emailAddressCopy\\:\\:content"
   );
   await emailCopyInput.waitFor({ state: "visible", timeout: 60000 });
-  await emailCopyInput.fill("test@example.com");
+  await emailCopyInput.fill("meseminalu@gmail.com");
 
   const nextButton = page.locator('button:has-text("Next")');
   await nextButton.waitFor({ state: "visible", timeout: 60000 });

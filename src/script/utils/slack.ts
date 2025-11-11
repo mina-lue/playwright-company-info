@@ -1,3 +1,6 @@
+
+
+/*
 import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs"
 import { Block, KnownBlock, WebClient } from "@slack/web-api"
 
@@ -42,6 +45,33 @@ export async function sendSlackMessage(channel: string, blocks: (Block | KnownBl
   } catch (error) {
     console.error("Error posting to Slack:", error)
     return ""
+  }
+}
+
+*/
+
+import { WebClient } from "@slack/web-api";
+import { config } from "dotenv";
+
+config(); // Load environment variables from .env file
+
+export async function sendSlackMessage( text: string): Promise<string> {
+  const slackBotToken = process.env.SLACK_BOT_TOKEN;
+  const channel = process.env.SLACK_CHANNEL_ID!;
+  
+  const slack = new WebClient(slackBotToken);
+
+  try {
+    const result = await slack.chat.postMessage({
+      channel,
+      text,
+    });
+
+    console.log("Slack message sent. ts:", result.ts);
+    return result.ts || "";
+  } catch (error) {
+    console.error("Error posting to Slack:", error);
+    return "";
   }
 }
 
