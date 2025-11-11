@@ -1,5 +1,6 @@
 import { chromium } from "playwright";
 import { solveRecaptcha } from "./utils/solveRecaptcha";
+import { pay } from "./utils/pay";
 
 export const fetchDocument = async (ACN : string ) : Promise<string> => {
   const browser = await chromium.launch({ headless: true }); 
@@ -36,7 +37,7 @@ export const fetchDocument = async (ACN : string ) : Promise<string> => {
   console.log('✅ Clicked "Go". Waiting for results table...');
 
   await page.waitForTimeout(1000);
-  await solveRecaptcha(page);
+  await solveRecaptcha(page); 
 
   await page
     .getByText("Information for purchase", { exact: false })
@@ -45,7 +46,7 @@ export const fetchDocument = async (ACN : string ) : Promise<string> => {
   console.log("✅ 'Information for purchase' section is visible!");
 
   const row = page.locator(
-    'tr:has-text("Current and historical company information")'
+    'tr', { hasText: 'Current company information' } // TODO : "Current and historical company information"
   );
   await row.waitFor({ state: "visible", timeout: 60000 });
 
@@ -113,13 +114,13 @@ export const fetchDocument = async (ACN : string ) : Promise<string> => {
     "input#bnConnectionTemplate\\:r1\\:2\\:emailAddress\\:\\:content"
   );
   await emailInput.waitFor({ state: "visible", timeout: 60000 });
-  await emailInput.fill("test@example.com");
+  await emailInput.fill("meseminalu@gmail.com");
 
   const emailCopyInput = page.locator(
     "input#bnConnectionTemplate\\:r1\\:2\\:emailAddressCopy\\:\\:content"
   );
   await emailCopyInput.waitFor({ state: "visible", timeout: 60000 });
-  await emailCopyInput.fill("test@example.com");
+  await emailCopyInput.fill("meseminalu@gmail.com");
 
   const nextButton = page.locator('button:has-text("Next")');
   await nextButton.waitFor({ state: "visible", timeout: 60000 });
@@ -138,8 +139,23 @@ export const fetchDocument = async (ACN : string ) : Promise<string> => {
   await nextButton.click({ force: true });
   console.log("✅ 'Next' button clicked successfully!");
 
+
+
+console.log('payment page loaded!')
+
+  const paid = await pay(page);
+
+  if (!paid) {
+    console.log("❌ Payment failed. Exiting...");
+    await browser.close();
+    return "";
+  }
+
   console.log("🎉 Done! Script finished successfully.");
-  await browser.close();
+
+  await page.pause();
+
+  // await browser.close();
 
   return await 'file_path' // the path the document downloaded
 }

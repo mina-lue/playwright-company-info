@@ -8,7 +8,7 @@ dotenv.config();
 const s3 = new S3Client();
 const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY
 const accessKeyId = process.env.AWS_ACCESS_KEY_ID
-const Bucket = process.env.BUCKET_NAME
+const Bucket = process.env.AWS_S3_BUCKET_NAME
 
 export const fileExists = async (bucket: string, key: string): Promise<boolean> => {
   try {
