@@ -37,7 +37,7 @@ export const fetchDocument = async (ACN : string ) : Promise<string> => {
   console.log('✅ Clicked "Go". Waiting for results table...');
 
   await page.waitForTimeout(1000);
-  // await solveRecaptcha(page); // TODO : solve recaptcha for production
+  await solveRecaptcha(page); 
 
   await page
     .getByText("Information for purchase", { exact: false })
