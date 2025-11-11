@@ -45,6 +45,8 @@ export async function solveRecaptcha(page: Page): Promise<void> {
     await submitBtn.click();
   } else {
     await triggerSiteAfterToken(page, captchaToken);
+
+    return;
   }
 }
 
